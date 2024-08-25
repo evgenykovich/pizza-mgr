@@ -15,7 +15,7 @@ Running locally you need 3 terminals open: one for client, one for server, and a
 
 Install Node.js;
 Install MongoDB;
-git clone https://EvgenyIssakovic@bitbucket.org/EvgenyIssakovic/pizza-mgr.git
+git clone https://github.com/evgenykovich/pizza-mgr.git
 Go to directory client, and run npm install;
 Go to directory server, and run npm install;
 In one terminal, run mongod;
