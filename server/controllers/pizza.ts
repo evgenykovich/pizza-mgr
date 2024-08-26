@@ -1,5 +1,6 @@
-import WebSocket from 'ws'
-import PizzaOrders, { IPizzaOrder } from '../models/pizzaOrder'
+import { PizzaOrders, IPizzaOrder } from '../models/pizzaOrder'
+import { WebSocketServer } from '../services'
+import { chunkArray, wait, workerConfigs } from '../utils'
 
 interface IWorker {
   type: string
@@ -12,43 +13,6 @@ interface IPizzaOrderWithTimestamp extends IPizzaOrder {
   timestamp: number
   timeTaken: string
 }
-
-class WebSocketServer {
-  private wss: WebSocket.Server
-  private clients: Set<WebSocket>
-
-  constructor(port: number) {
-    this.wss = new WebSocket.Server({ port })
-    this.clients = new Set()
-
-    this.wss.on('connection', (ws: WebSocket) => {
-      this.clients.add(ws)
-      ws.on('message', (message: string) => this.handleMessage(ws, message))
-      ws.on('close', () => this.clients.delete(ws))
-    })
-  }
-
-  broadcast(message: string): void {
-    this.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message)
-      }
-    })
-  }
-
-  private handleMessage(ws: WebSocket, message: string): void {
-    console.log('received: %s', message)
-  }
-}
-
-const chunkArray = <T>(arr: T[], size: number): T[][] => {
-  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-    arr.slice(i * size, i * size + size)
-  )
-}
-
-const wait = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms))
 
 const websocketServer = new WebSocketServer(8080)
 
@@ -63,45 +27,13 @@ const createWorker = (
   processOrder,
 })
 
-const workerConfigs = [
-  {
-    type: 'cook',
-    count: 2,
-    startStatus: 'preparing dough',
-    endStatus: 'dough prepared',
-    duration: 7000,
-  },
-  {
-    type: 'toppingsCook',
-    count: 3,
-    startStatus: 'adding toppings',
-    endStatus: 'toppings added',
-    duration: 2000,
-    hasToppings: true,
-  },
-  {
-    type: 'ovens',
-    count: 1,
-    startStatus: 'pizza in the oven',
-    endStatus: 'pizza out of the oven',
-    duration: 10000,
-  },
-  {
-    type: 'server',
-    count: 3,
-    startStatus: 'pizza being delivered',
-    endStatus: 'pizza delivered',
-    duration: 5000,
-  },
-]
-
 const workers: IWorker[] = workerConfigs.map((config) =>
   createWorker(config.type, config.count, async (order: IPizzaOrder) => {
     console.log(`${config.type} is ${config.startStatus} for order `, order)
     order.status = config.startStatus
     websocketServer.broadcast(JSON.stringify(order))
 
-    if (config.hasToppings) {
+    if (order.toppings && order.toppings.length > 0) {
       const toppingsChunks = chunkArray(order.toppings, 2)
       for (const chunk of toppingsChunks) {
         await wait(config.duration)
