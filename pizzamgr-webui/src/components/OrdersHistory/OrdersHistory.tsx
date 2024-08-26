@@ -14,16 +14,6 @@ export const OrdersHistory = () => {
     fetchOrders()
   }, [])
 
-  console.log(orders)
-
-  const renderOrder = () => {
-    return orders.map((order) => (
-      <Fragment key={order._id}>
-        <OrderCard order={order} />
-      </Fragment>
-    ))
-  }
-
   return (
     <OrdersHistoryContainer>
       <div>Total orders: {orders.length}</div>
