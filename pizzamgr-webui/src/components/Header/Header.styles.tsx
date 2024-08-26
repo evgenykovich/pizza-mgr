@@ -12,6 +12,7 @@ export const HeaderContainer = styled.div`
   border-bottom: 1px solid #e13e2f;
   box-shadow: #e13e2f 0 0 20px 0;
   background: #fff;
+  z-index: 1000;
 `
 
 export const HeaderLinksContainer = styled.div`

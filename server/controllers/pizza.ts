@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import { PizzaOrders, IPizzaOrder } from '../models/pizzaOrder'
 import { WebSocketServer } from '../services'
 import { chunkArray, wait, workerConfigs } from '../utils'
@@ -145,7 +146,10 @@ const processQueue = async (): Promise<void> => {
   }
 }
 
-export const createOrder = async (req: any, res: any): Promise<void> => {
+export const createOrder = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const orders: IPizzaOrder[] = req.body
   try {
     const ordersProcessed = await enqueueOrder(orders)
@@ -175,5 +179,36 @@ export const createOrder = async (req: any, res: any): Promise<void> => {
     res.status(422).json({
       message: 'Error! could not create order',
     })
+  }
+}
+
+export const getOrders = async (req: Request, res: Response): Promise<void> => {
+  const orders = await PizzaOrders.find()
+  res.json(orders)
+}
+
+export const deleteOrder = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params
+
+  if (!id) {
+    res.status(400).json({ message: 'Order ID is required' })
+    return
+  }
+
+  try {
+    const deletedOrder = await PizzaOrders.findByIdAndDelete(id)
+
+    if (!deletedOrder) {
+      res.status(404).json({ message: 'Order not found' })
+      return
+    }
+
+    res.json({ message: 'Order deleted successfully', deletedOrder })
+  } catch (error) {
+    console.error('Error deleting order:', error)
+    res.status(500).json({ message: 'Internal server error' })
   }
 }
