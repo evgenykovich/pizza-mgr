@@ -18,9 +18,7 @@ const pizzaOrdersSchema = new Schema<IPizzaOrder>({
   timeTaken: { type: String },
 })
 
-const PizzaOrders = mongoose.model<IPizzaOrder>(
+export const PizzaOrders = mongoose.model<IPizzaOrder>(
   'PizzaOrders',
   pizzaOrdersSchema
 )
-
-export default PizzaOrders
