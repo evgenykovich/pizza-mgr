@@ -218,14 +218,16 @@ export const createOrder = async (req: any, res: any): Promise<void> => {
   try {
     const ordersProcessed = await enqueueOrder(orders)
 
-    const ordersFormatted = ordersProcessed.map((order) => ({
-      customerName: order.customerName,
-      dough: order.dough,
-      toppings: order.toppings,
-      status: order.status,
-      created: new Date(),
-      timeTaken: order.timeTaken,
-    }))
+    const ordersFormatted = ordersProcessed.map(
+      ({ customerName, dough, toppings, status, timeTaken }) => ({
+        customerName,
+        dough,
+        toppings,
+        status,
+        created: new Date(),
+        timeTaken,
+      })
+    )
 
     try {
       await PizzaOrders.insertMany(ordersFormatted)
