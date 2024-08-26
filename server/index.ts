@@ -9,7 +9,14 @@ const app: express.Application = express()
 
 mongoose.Promise = global.Promise
 
-mongoose.connect('mongodb://127.0.0.1:27017/pizza')
+// mongoose.connect('mongodb://127.0.0.1:27017/pizza', {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true
+// });
+
+mongoose.connect(
+  'mongodb+srv://evgenykovich:Qwerty78()@cluster0.exritzi.mongodb.net/pizza'
+)
 
 app.use(morgan('combined'))
 app.use(bodyParser.json({ type: '*/*' }))

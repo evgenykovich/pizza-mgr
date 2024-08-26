@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useState } from 'react'
 import { AutoSizer, List } from 'react-virtualized'
 import { getOrders, OrderProps } from '../../utils/actions'
 import { OrderCard } from '../OrderCard'
