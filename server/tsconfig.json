@@ -3,6 +3,7 @@
     "target": "es6",
     "module": "commonjs",
     "outDir": "./dist",
+    "types": ["prop-types"],
     "strict": true,
     "esModuleInterop": true
   },
