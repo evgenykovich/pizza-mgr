@@ -1,22 +1,19 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Home } from './components/Home'
 import reportWebVitals from './reportWebVitals'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { Orders } from './components/Orders'
-import { Header } from './components/Header'
+import { Orders, Home, Header, OrdersHistory } from './components'
 import './index.css'
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-)
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <Header/>
+      <Header />
       <Routes>
-        <Route path="/" element={<Home/>}/>
-        <Route path="orders" element={<Orders/>}/>
+        <Route path="/" element={<Home />} />
+        <Route path="orders" element={<Orders />} />
+        <Route path="orders-history" element={<OrdersHistory />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
