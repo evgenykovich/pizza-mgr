@@ -15,16 +15,16 @@ interface IPizzaOrderWithTimestamp extends IPizzaOrder {
 
 class WebSocketServer {
   private wss: WebSocket.Server
-  private clients: WebSocket[]
+  private clients: Set<WebSocket>
 
   constructor(port: number) {
     this.wss = new WebSocket.Server({ port })
-    this.clients = []
+    this.clients = new Set()
 
     this.wss.on('connection', (ws: WebSocket) => {
-      this.clients.push(ws)
+      this.clients.add(ws)
       ws.on('message', (message: string) => this.handleMessage(ws, message))
-      ws.on('close', () => this.handleClose(ws))
+      ws.on('close', () => this.clients.delete(ws))
     })
   }
 
@@ -39,95 +39,84 @@ class WebSocketServer {
   private handleMessage(ws: WebSocket, message: string): void {
     console.log('received: %s', message)
   }
-
-  private handleClose(ws: WebSocket): void {
-    const index = this.clients.indexOf(ws)
-    if (index !== -1) {
-      this.clients.splice(index, 1)
-    }
-  }
 }
 
 const chunkArray = <T>(arr: T[], size: number): T[][] => {
-  const chunks: T[][] = []
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size))
-  }
-  return chunks
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, i * size + size)
+  )
 }
 
-const wait = async (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
 
 const websocketServer = new WebSocketServer(8080)
 
-const workers: IWorker[] = [
+const createWorker = (
+  type: string,
+  count: number,
+  processOrder: (order: IPizzaOrder) => Promise<IPizzaOrder>
+): IWorker => ({
+  type,
+  count,
+  processing: false,
+  processOrder,
+})
+
+const workerConfigs = [
   {
     type: 'cook',
     count: 2,
-    processing: false,
-    processOrder: async (order: IPizzaOrder): Promise<IPizzaOrder> => {
-      console.log('Dough Cook is preparing dough for order ', order)
-      order.status = 'preparing dough'
-      websocketServer.broadcast(JSON.stringify(order))
-      await wait(7000)
-      console.log('Dough Cook finished preparing dough for order ', order)
-      order.status = 'dough prepared'
-      websocketServer.broadcast(JSON.stringify(order))
-      return order
-    },
+    startStatus: 'preparing dough',
+    endStatus: 'dough prepared',
+    duration: 7000,
   },
   {
     type: 'toppingsCook',
     count: 3,
-    processing: false,
-    processOrder: async (order: IPizzaOrder): Promise<IPizzaOrder> => {
-      console.log('Toppings Cook is handling Toppings meal for order ', order)
-      order.status = 'adding toppings'
-      websocketServer.broadcast(JSON.stringify(order))
-      const toppingsChunks = chunkArray(order.toppings, 2)
-      for (const chunk of toppingsChunks) {
-        await wait(2000)
-        console.log('Toppings added to the meal', chunk)
-      }
-      console.log('Toppings Cook finished Toppings meal for order ', order)
-      order.status = 'toppings added'
-      websocketServer.broadcast(JSON.stringify(order))
-      return order
-    },
+    startStatus: 'adding toppings',
+    endStatus: 'toppings added',
+    duration: 2000,
+    hasToppings: true,
   },
   {
     type: 'ovens',
     count: 1,
-    processing: false,
-    processOrder: async (order: IPizzaOrder): Promise<IPizzaOrder> => {
-      console.log('Pizza is in the Oven', order)
-      order.status = 'pizza in the oven'
-      websocketServer.broadcast(JSON.stringify(order))
-      await wait(10000)
-      console.log('Pizza is out of the Oven', order)
-      order.status = 'pizza out of the oven'
-      websocketServer.broadcast(JSON.stringify(order))
-      return order
-    },
+    startStatus: 'pizza in the oven',
+    endStatus: 'pizza out of the oven',
+    duration: 10000,
   },
   {
     type: 'server',
     count: 3,
-    processing: false,
-    processOrder: async (order: IPizzaOrder): Promise<IPizzaOrder> => {
-      console.log('Server is delivering meal for order ', order)
-      order.status = 'pizza being delivered'
-      websocketServer.broadcast(JSON.stringify(order))
-      await wait(5000)
-      console.log('Server finished delivering meal for order ', order)
-      order.status = 'pizza delivered'
-      websocketServer.broadcast(JSON.stringify(order))
-      return order
-    },
+    startStatus: 'pizza being delivered',
+    endStatus: 'pizza delivered',
+    duration: 5000,
   },
 ]
+
+const workers: IWorker[] = workerConfigs.map((config) =>
+  createWorker(config.type, config.count, async (order: IPizzaOrder) => {
+    console.log(`${config.type} is ${config.startStatus} for order `, order)
+    order.status = config.startStatus
+    websocketServer.broadcast(JSON.stringify(order))
+
+    if (config.hasToppings) {
+      const toppingsChunks = chunkArray(order.toppings, 2)
+      for (const chunk of toppingsChunks) {
+        await wait(config.duration)
+        console.log('Toppings added to the meal', chunk)
+      }
+    } else {
+      await wait(config.duration)
+    }
+
+    console.log(`${config.type} finished ${config.endStatus} for order `, order)
+    order.status = config.endStatus
+    websocketServer.broadcast(JSON.stringify(order))
+    return order
+  })
+)
 
 const queue: IPizzaOrder[] = []
 
@@ -135,10 +124,8 @@ const enqueueOrder = async (orders: IPizzaOrder[]) => {
   const timestamp = Date.now()
   const ordersWithTimestamp = orders.map((order) => ({ ...order, timestamp }))
 
-  ordersWithTimestamp.forEach((order) => {
-    queue.push(order as IPizzaOrderWithTimestamp)
-    console.log('New order added to the queue: ', order)
-  })
+  queue.push(...(ordersWithTimestamp as IPizzaOrderWithTimestamp[]))
+  console.log('New orders added to the queue: ', ordersWithTimestamp)
 
   await processQueue()
 
@@ -151,37 +138,30 @@ const enqueueOrder = async (orders: IPizzaOrder[]) => {
 
 const getAvailableWorker = (workers: IWorker[]): Promise<IWorker> => {
   return new Promise((resolve) => {
-    const intervalId = setInterval(() => {
+    const checkWorker = () => {
       const availableWorker = workers.find((worker) => !worker.processing)
       if (availableWorker) {
-        clearInterval(intervalId)
         resolve(availableWorker)
+      } else {
+        setTimeout(checkWorker, 1000)
       }
-    }, 1000)
+    }
+    checkWorker()
   })
 }
 
 const processQueue = async (): Promise<void> => {
-  const cooks: IWorker[] = []
-  const toppingsCook: IWorker[] = []
-  const ovens: IWorker[] = []
-  const servers: IWorker[] = []
+  const workerArrays = {
+    cook: [] as IWorker[],
+    toppingsCook: [] as IWorker[],
+    ovens: [] as IWorker[],
+    server: [] as IWorker[],
+  }
 
   workers.forEach((worker) => {
-    const workerArray =
-      worker.type === 'cook'
-        ? cooks
-        : worker.type === 'toppingsCook'
-        ? toppingsCook
-        : worker.type === 'ovens'
-        ? ovens
-        : worker.type === 'server'
-        ? servers
-        : null
-
-    if (workerArray && !worker.processing) {
+    if (worker.type in workerArrays && !worker.processing) {
       for (let i = 0; i < worker.count; i++) {
-        workerArray.push({
+        workerArrays[worker.type as keyof typeof workerArrays].push({
           ...worker,
           processing: false,
         })
@@ -189,12 +169,7 @@ const processQueue = async (): Promise<void> => {
     }
   })
 
-  if (
-    !cooks.length ||
-    !toppingsCook.length ||
-    !ovens.length ||
-    !servers.length
-  ) {
+  if (Object.values(workerArrays).some((arr) => arr.length === 0)) {
     console.log('Not all worker types are available to process orders')
     return
   }
@@ -203,10 +178,7 @@ const processQueue = async (): Promise<void> => {
     0,
     Math.min(
       queue.length,
-      cooks.length,
-      toppingsCook.length,
-      ovens.length,
-      servers.length
+      ...Object.values(workerArrays).map((arr) => arr.length)
     )
   )
 
@@ -223,15 +195,8 @@ const processQueue = async (): Promise<void> => {
       return processedOrder
     }
 
-    const stages = [
-      { array: cooks, name: 'cook' },
-      { array: toppingsCook, name: 'topping cook' },
-      { array: ovens, name: 'oven' },
-      { array: servers, name: 'server' },
-    ]
-
-    for (const stage of stages) {
-      const result = await processStage(stage.array, stage.name)
+    for (const [stageName, workerArray] of Object.entries(workerArrays)) {
+      const result = await processStage(workerArray, stageName)
       if (!result) return
       order = result
     }
@@ -266,13 +231,13 @@ export const createOrder = async (req: any, res: any): Promise<void> => {
       await PizzaOrders.insertMany(ordersFormatted)
       res.json(ordersProcessed)
     } catch (err) {
-      console.log(err)
+      console.error('Error creating order:', err)
       res.status(422).json({
         message: 'Error! could not create order',
       })
     }
   } catch (err) {
-    console.log(err)
+    console.error('Error processing order:', err)
     res.status(422).json({
       message: 'Error! could not create order',
     })
